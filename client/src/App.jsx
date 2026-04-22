@@ -5,74 +5,96 @@ import "./App.css";
 const socket = io.connect("http://localhost:3000");
 
 export default function App() {
+  const [username, setUsername] = useState("");
+  const [room, setRoom] = useState("");
   const [msg, setMsg] = useState("");
   const [messages, setMessages] = useState([]);
-  const [room, setRoom] = useState("");
   const [joined, setJoined] = useState(false);
 
   const joinRoom = () => {
-    if (room.trim() !== "") {
+    if (username && room) {
       socket.emit("join_room", room);
       setJoined(true);
     }
   };
 
   const sendMessage = () => {
-    if (msg.trim() === "") return;
-    socket.emit("send_message", { message: msg, room });
-    setMsg("");
-  };
+    if (!msg) return;
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") sendMessage();
+    const data = {
+      room,
+      author: username,
+      message: msg,
+    };
+
+    socket.emit("send_message", data);
+
+    setMessages((prev) => [...prev, data]); // show instantly
+    setMsg("");
   };
 
   useEffect(() => {
     socket.on("receive_message", (data) => {
-      setMessages((prev) => [
-        ...prev,
-        { text: data.message, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
-      ]);
+      setMessages((prev) => [...prev, data]);
     });
 
     return () => socket.off("receive_message");
   }, []);
 
+  useEffect(() => {
+    const box = document.querySelector(".chat-body");
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [messages]);
+
   return (
     <div className="app">
-      <div className="header">
-        <h2>Chat room {joined && <span className="badge">{room}</span>}</h2>
-        <p>{joined ? "Connected" : "Join a room to start chatting"}</p>
-      </div>
+      {/* SIDEBAR */}
+      <div className="sidebar">
+        <h2>Chats</h2>
 
-      <div className="room-bar">
         <input
+          placeholder="Your name"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+
+        <input
+          placeholder="Room id"
           value={room}
           onChange={(e) => setRoom(e.target.value)}
-          type="text"
-          placeholder="Room code..."
         />
-        <button onClick={joinRoom}>Join room</button>
+
+        <button onClick={joinRoom}>Start Chat</button>
       </div>
 
-      <div className="messages">
-        {messages.map((m, i) => (
-          <div key={i} className="bubble">
-            <div className="text">{m.text}</div>
-            <div className="time">{m.time}</div>
-          </div>
-        ))}
-      </div>
+      {/* CHAT AREA */}
+      <div className="chat">
+        <div className="chat-header">
+          {joined ? `Room: ${room}` : "Join a room"}
+        </div>
 
-      <div className="input-bar">
-        <input
-          value={msg}
-          onChange={(e) => setMsg(e.target.value)}
-          onKeyDown={handleKeyDown}
-          type="text"
-          placeholder="Type a message..."
-        />
-        <button onClick={sendMessage}>Send</button>
+        <div className="chat-body">
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={`msg ${
+                m.author === username ? "me" : "other"
+              }`}
+            >
+              <span className="name">{m.author}</span>
+              <p>{m.message}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="chat-footer">
+          <input
+            value={msg}
+            onChange={(e) => setMsg(e.target.value)}
+            placeholder="Type a message"
+          />
+          <button onClick={sendMessage}>Send</button>
+        </div>
       </div>
     </div>
   );
